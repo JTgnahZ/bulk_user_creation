@@ -17,13 +17,13 @@ MIT
 bash#python Bulk-User-Creation.py bulk_list_simple.csv 
 
 #### Prepare bulk csv file:
-Please make sure to input system accepted roles or the defined custom roles
-#Tenant base roles are:
-##tenant_iam_admin, 
-##tenant_network_admin, 
-##tenant_security_admin, 
-##tenant_viewonly, 
-##tenant_super
+Please make sure to input only tenant base roles or the custom defined roles
+##### Tenant base roles are:
+##### -tenant_iam_admin, 
+##### -tenant_network_admin, 
+##### -tenant_security_admin, 
+##### -tenant_viewonly, 
+##### -tenant_super
 
 
 #### Version
