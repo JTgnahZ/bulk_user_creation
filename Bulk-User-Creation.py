@@ -43,30 +43,33 @@ cgx_session.interactive.use_token(AUTH_TOKEN)
 
 
 #Creating system role map
-
-ROLES = []
-rolemap = {}
+tenant_roles = []
+tenant_rolemap = {}
 
 resp = cgx_session.get.base_roles()
+
 if resp.cgx_status:
     sysroles = resp.cgx_content.get("items", None)
     for role in sysroles:
-        base_rolemap = {role["name"]: [{"name": role["name"]}]}
-        ROLES.append(role["name"])
-        rolemap.update(base_rolemap)
+        base_rolemap = {role["name"]: {"name": role["name"]}}
+        tenant_roles.append(role["name"])
+        tenant_rolemap.update(base_rolemap)
 else:
     print("ERR: Could not retrieve base roles")
     cloudgenix.jd_detailed(resp)
     
-# Retrieve custom roles and update rolemap
+# Create custom roles and update custom rolemap
+custom_roles = []
+custome_rolemap = {}
+
 resp = cgx_session.get.roles()
 
 if resp.cgx_status:
-    custom_roles = resp.cgx_content.get("items", None)
-    for role in custom_roles:
-        custom_rolemap = {role["name"]: [{"name": role["name"]}]}
-        ROLES.append(role["name"])
-        rolemap.update(custom_rolemap)
+    roles = resp.cgx_content.get("items", None)
+    for role in roles:
+        rolemap = {role["name"]: {"id": role["id"]}}
+        custom_roles.append(role["name"])
+        custom_rolemap.update(rolemap)
 else:
     print("ERR: Could not retrieve base roles")
     cloudgenix.jd_detailed(resp[name])
@@ -87,33 +90,66 @@ else:
 
 
 # Read and validate roles from CSV
-# Only validate if email is in csv and no duplication in existing operators. 
-with open(bulkcsv, 'r') as csv_file:
+# Only validate if email is in csv and no duplication in existing operators. More key field to be defined.
+with open('bulk_list_simple.csv', 'r') as csv_file:
     csv_reader = csv.DictReader(csv_file)
     
     for data in csv_reader:
     
         roles = data["roles"]
-        email = data["email"]
+        email = data["email"]        
         
-        #multiple system roles not working now. 
+        signup_data = {
+            "first_name": [],
+            "email": [],
+            "secondary_emails": [],
+            "phone_numbers": [],
+            "roles": [],
+            "custom_roles": [],
+            "disabled": False,
+            "disable_idp_login": True,
+            "enable_session_ip_lock": False,
+            "ipv4_list": [],
+            "last_name": [],
+            "password": [],
+            "repeatPassword": []
+        }
+        
+        signup_data["first_name"] = data["first_name"]
+        signup_data["last_name"] = data["last_name"]
+        signup_data["email"] = data["email"]
+        signup_data["password"] = data["password"]
+        signup_data["repeatPassword"] = data["password"]
+        
         if roles:
             if "," in roles:
                 tmp = roles.split(",")
 
                 for role in tmp:
-                    if role not in ROLES:
-                        print("ERR: Invalid role. Please choose from: 'tenant_iam_admin', 'tenant_network_admin', 'tenant_security_admin', 'tenant_viewonly', 'tenant_super' or custom roles defined in system")
+                    if role not in tenant_roles:
+                        if role not in custom_roles:
+                            print("ERR: Invalid role. Please input defined custom roles")
+                            sys.exit()
+                        else:
+                            mappedrole = custom_rolemap[role]
+                            signup_data["custom_roles"].append(mappedrole)
+                                
+                    else:
+                        mappedrole = tenant_rolemap[role]
+                        signup_data["roles"].append(mappedrole)
+            else:
+                if roles not in tenant_roles:
+                    if roles not in custom_roles:
+                        print("ERR: Invalid role. Please input defined custom roles")
                         sys.exit()
                     else:
-                        mappedrole = rolemap[role]
-            else:
-                if roles in ROLES:
-                    mappedrole = rolemap[roles]
-                    data["roles"] = mappedrole
+                        mappedrole = custom_rolemap[roles]
+                        signup_data["custom_roles"].append(mappedrole)
+                            
                 else:
-                    print("ERR: Invalid role. Please choose from: super,viewonly,secadmin,nwadmin or iamadmin")
-                    sys.exit()
+                    mappedrole = tenant_rolemap[roles]
+                    signup_data["roles"].append(mappedrole)
+
         if email:
             if email in email_list:
                 print("ERR: Operator existed, duplicated operator email is ", email)
@@ -121,12 +157,11 @@ with open(bulkcsv, 'r') as csv_file:
         else:
                 print("ERR: Need primary email to create user account. Please make sure all new users input emails. ")
                 sys.exit()
-        
-        resp = cgx_session.post.signup(data=data)
+
+        resp = cgx_session.post.signup(signup_data)
 
         if resp.cgx_status:
             oid = resp.cgx_content.get("id", None)
             print("Operator created. ID: {}".format(oid))
         else:
             print("ERR: Could not create Operator")
-
